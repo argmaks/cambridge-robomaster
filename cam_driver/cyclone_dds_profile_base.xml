@@ -6,7 +6,9 @@
             <LogLevel>info</LogLevel>
         </SharedMemory>
         <General>
-	    <AllowMulticast>true</AllowMulticast>
+            <Interfaces>
+                <NetworkInterface name="wlan0"/>
+            </Interfaces>
         </General>
     </Domain>
 </CycloneDDS>
