@@ -1,6 +1,8 @@
 /**:
   ros__parameters:
-    gscam_config: "nvarguscamerasrc sensor-id=0 sensor-mode=1 ! video/x-raw(memory:NVMM),width=1920,height=1080,framerate=60/1' ! nvvidconv ! videoflip method=vertical-flip ! videoconvert"
+    # Pi v2 (IMX219) sensor-mode=2 → 1920x1080 @ 30fps (max for this mode)
+    # flip-method=6 in nvvidconv replaces the separate videoflip element (required for NVMM buffers)
+    gscam_config: "nvarguscamerasrc sensor-id=0 sensor-mode=2 ! video/x-raw(memory:NVMM),width=(int)1920,height=(int)1080,format=(string)NV12,framerate=(fraction)30/1 ! nvvidconv flip-method=6 ! video/x-raw,format=RGBA ! videoconvert"
     use_gst_timestamps: True
     camera_name: 'front_camera'
     frame_id: 'front_camera_frame'

@@ -64,7 +64,7 @@ class ImageSaver(Node):
 
 def main():
     topic = sys.argv[1] if len(sys.argv) > 1 else '/robomaster_2/camera_0/image_proc'
-    output = sys.argv[2] if len(sys.argv) > 2 else '/opt/Robot/camera_sample.jpg'
+    output = sys.argv[2] if len(sys.argv) > 2 else '/home/nvidia/Robot/camera_sample.jpg'
     rclpy.init()
     node = ImageSaver(topic, output)
     try:

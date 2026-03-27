@@ -1,22 +1,20 @@
-cat /sys/kernel/debug/bpmp/debug/clk/vi/max_rate
-cat /sys/kernel/debug/bpmp/debug/clk/isp/max_rate
-cat /sys/kernel/debug/bpmp/debug/clk/nvcsi/max_rate
-cat /sys/kernel/debug/bpmp/debug/clk/vic/max_rate
-cat /sys/kernel/debug/bpmp/debug/clk/emc/max_rate
+#!/usr/bin/env bash
+# Read camera subsystem clock configuration on Jetson platforms.
+# Compatible with JP5 (L4T r35.x) and JP6 (L4T r36.x).
 
-echo
+BPMP_CLK=/sys/kernel/debug/bpmp/debug/clk
 
-cat /sys/kernel/debug/bpmp/debug/clk/vi/rate
-cat /sys/kernel/debug/bpmp/debug/clk/isp/rate
-cat /sys/kernel/debug/bpmp/debug/clk/nvcsi/rate
-cat /sys/kernel/debug/bpmp/debug/clk/vic/rate
-cat /sys/kernel/debug/bpmp/debug/clk/emc/rate
+read_clk() {
+    local name=$1
+    local path="${BPMP_CLK}/${name}"
+    if [ -d "${path}" ]; then
+        echo "=== ${name} ==="
+        echo "  max_rate:        $(cat ${path}/max_rate)"
+        echo "  rate:            $(cat ${path}/rate)"
+        echo "  mrq_rate_locked: $(cat ${path}/mrq_rate_locked)"
+    fi
+}
 
-echo
-
-cat /sys/kernel/debug/bpmp/debug/clk/vi/mrq_rate_locked
-cat /sys/kernel/debug/bpmp/debug/clk/isp/mrq_rate_locked
-cat /sys/kernel/debug/bpmp/debug/clk/nvcsi/mrq_rate_locked
-cat /sys/kernel/debug/bpmp/debug/clk/vic/mrq_rate_locked
-cat /sys/kernel/debug/bpmp/debug/clk/emc/mrq_rate_locked   
-
+for clk in vi vi0 vi1 isp nvcsi vic emc; do
+    read_clk "${clk}"
+done
