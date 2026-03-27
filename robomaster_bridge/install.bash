@@ -2,6 +2,8 @@
 
 set -e # Fail script if any command fails
 
+cd "$(dirname "$0")"
+
 if [[ $UID != 0 ]]; then
     echo "Please run this script with sudo."
     exit 1

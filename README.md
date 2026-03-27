@@ -37,22 +37,51 @@ Each subdirectory is a self-contained service, typically running as a Docker con
 
 ## First-Time Setup (per Jetson)
 
-```bash
-# 1. Provision the OS
-sudo bash setup/setup.bash
+### 1. Set hostname and passwordless sudo
 
-# 2. Install and start the CAN bridge (requires reboot)
+```bash
+sudo ./setup/sudocfg.bash       # allow nvidia user to run sudo without password
+sudo vim /etc/hostname           # set to e.g. robomaster-1
+sudo reboot
+```
+
+### 2. Set up Docker
+
+```bash
+sudo ./docker/add_group.bash
+sudo ./docker/setup_docker_compose.bash
+sudo cp docker/daemon.json /etc/docker/
+sudo service docker restart
+```
+
+### 3. Provision the OS
+
+```bash
+sudo bash setup/setup.bash
+```
+
+### 4. Install and start the CAN bridge
+
+```bash
 cd robomaster_bridge
 sudo bash install.bash
-# reboot
+# reboot if prompted for CAN interface changes
+bash robomaster_bridge/run_docker.sh
+```
 
-# 3. (Optional) Install the camera service
+### 5. (Optional) Install the camera service
+
+```bash
 cd cam_driver
 sudo bash install.bash
+```
 
-# 4. (Optional) Install the UI service
+### 6. (Optional) Install and run the UI service
+
+```bash
 cd ui
 sudo bash install.bash
+bash ui/run_docker.sh
 ```
 
 ---

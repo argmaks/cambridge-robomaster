@@ -1,6 +1,7 @@
-FROM dustynv/ros:humble-ros-base-l4t-r35.3.1
+FROM dustynv/ros:humble-desktop-l4t-r36.4.0
 
-RUN apt-get update && apt-get install -y git nano
+RUN curl -sSL https://raw.githubusercontent.com/ros/rosdistro/master/ros.key -o /usr/share/keyrings/ros-archive-keyring.gpg && \
+    apt-get update && apt-get install -y git nano
 
 RUN mkdir /opt/robomaster
 WORKDIR /opt/robomaster

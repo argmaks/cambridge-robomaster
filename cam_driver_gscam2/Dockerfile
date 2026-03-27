@@ -1,4 +1,4 @@
-FROM dustynv/ros:humble-ros-base-l4t-r35.3.1
+FROM dustynv/ros:humble-desktop-l4t-r36.4.0
 
 RUN apt-get update && apt-get install -y git nano
 
