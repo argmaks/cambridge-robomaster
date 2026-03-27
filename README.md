@@ -111,6 +111,67 @@ This is the **opposite** of ROS REP-103 (Z-up, CCW positive). Negate `angular.z`
 
 
 
+### Velocity limits (simulator reference)
+
+The values below are the clamp limits defined in `ros2_panoptes/src/simple_simulator/simple_simulator/simple_robomaster.py` and likely reflect DJI's documented hardware limits. They are **not enforced by the real bridge** — treat them as a safe operating guideline until verified on hardware.
+
+| Field | Max |
+|---|---|
+| `linear.x` | ±3.5 m/s |
+| `linear.y` | ±2.8 m/s |
+| `angular.z` | ±10.5 rad/s |
+
+### Sending raw wheel RPM commands (`cmd_wheels`)
+
+For direct wheel control, publish `robomaster_msgs/msg/WheelSpeed` to `/<robot_ns>/cmd_wheels`. Use **`-r 50` Hz** — the firmware requires a sustained command stream at this rate.
+
+```bash
+ros2 topic pub -r 50 /robomaster_2/cmd_wheels robomaster_msgs/msg/WheelSpeed \
+  "{fr: 200, fl: 200, rl: 200, rr: 200}"
+```
+
+RPM range is **-1000 to 1000** per wheel (`fl` = front-left, `fr` = front-right, `rl` = rear-left, `rr` = rear-right).
+
+---
+
+## Camera
+
+### Overview
+
+The `cam_driver/` service runs two nodes under `/<robot_ns>/camera_0/`:
+
+| Node | Subscribes | Publishes | Description |
+|---|---|---|---|
+| `camera_source` | — | `image_raw`, `camera_info` | Captures from CSI camera at 1920×1080 @ 15 fps via NVIDIA Argus |
+| `camera_proc` | `image_raw`, `camera_info` | `image_proc` | Fisheye undistortion + downscale to 224px height, 120° FOV |
+
+`image_proc` is the ML-ready output (≈398×224). Use `image_raw` for full resolution.
+
+The camera service starts automatically on boot via `camera_stream_0.service` (installed by `sudo bash cam_driver/install.bash`). It has a 30-second pre-start delay to wait for the Argus daemon.
+
+> **Note:** Cyclone DDS in the camera container is pinned to `wlan0` — you must be on the same Wi-Fi network to receive image topics from another machine.
+
+### Grabbing a sample image
+
+`grab_image.py` (in this repo) subscribes to an image topic and saves one frame to disk. Run it from inside the `ros2_panoptes_control` container:
+
+```bash
+# Start the container (Robot/ is mounted at /opt/Robot)
+bash /home/nvidia/ros2_panoptes/docker/control/run_docker.sh
+
+# Inside the container — save the processed stream (398x224, default)
+python3 /opt/Robot/grab_image.py
+
+# Save the raw full-resolution stream (1920x1080)
+python3 /opt/Robot/grab_image.py /robomaster_2/camera_0/image_raw /opt/Robot/raw.jpg
+```
+
+The image is written to `/home/nvidia/Robot/camera_sample.jpg` on the host.
+
+> **QoS note:** The camera publishes with `best_effort` reliability (`qos_profile_sensor_data`). Subscribing with the default `reliable` QoS will silently receive nothing — `grab_image.py` already handles this correctly.
+
+---
+
 ### Emergency stop
 
 The `EmergencyStop` ROS 2 service must not be in the stopped state. If the robot is unresponsive, clear the stop:
