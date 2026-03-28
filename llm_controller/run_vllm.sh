@@ -13,7 +13,7 @@
 
 MODEL="${1:-Qwen/Qwen3.5-0.8B}"
 GPU_MEM="${GPU_MEM:-0.55}"
-MAX_MODEL_LEN="${MAX_MODEL_LEN:-2048}"
+MAX_MODEL_LEN="${MAX_MODEL_LEN:-4096}"
 
 echo "Starting vLLM server with model: $MODEL"
 echo "  GPU memory utilisation: $GPU_MEM"
