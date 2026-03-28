@@ -360,6 +360,17 @@ To change the robot's behaviour, edit `USER_PROMPT` in `control.py`. The LLM is 
 
 which is parsed and clipped to the velocity limits before publishing.
 
+### Visual Question Answering (`test_vlm.py`)
+
+`llm_controller/test_vlm.py` tests VLM visual question answering against a live camera frame. Run it from inside the controller container:
+
+```bash
+python3 /opt/robot/llm_controller/test_vlm.py "What obstacles are ahead?"
+python3 /opt/robot/llm_controller/test_vlm.py "What do you see?" --size 224  # resize before sending
+```
+
+It saves the frame and the response to `/opt/robot/` and prints TTFT and throughput (tok/s).
+
 ### Tuning vLLM memory
 
 `gpu_memory_utilization` must be set below `free_gpu / total_gpu`. Check with:
