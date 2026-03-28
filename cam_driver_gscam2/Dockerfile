@@ -1,6 +1,7 @@
 FROM dustynv/ros:humble-desktop-l4t-r36.4.0
 
-RUN apt-get update && apt-get install -y git nano
+RUN curl -sSL https://raw.githubusercontent.com/ros/rosdistro/master/ros.key -o /usr/share/keyrings/ros-archive-keyring.gpg && \
+    apt-get update && apt-get install -y git nano ros-humble-vision-msgs
 
 RUN apt-get install -y libgstreamer1.0-0 gstreamer1.0-plugins-base gstreamer1.0-plugins-good \
  gstreamer1.0-plugins-bad gstreamer1.0-plugins-ugly gstreamer1.0-libav gstreamer1.0-tools \

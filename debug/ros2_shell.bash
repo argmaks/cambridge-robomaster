@@ -7,6 +7,6 @@ docker run --runtime nvidia -it --rm \
     --hostname $(cat /etc/hostname) \
     -e ROS_DOMAIN_ID=0 \
     -e RMW_IMPLEMENTATION=rmw_cyclonedds_cpp \
-    -v /home/nvidia/Robot:/opt/robot:ro \
+    -v /home/nvidia/Robot:/opt/robot \
     dustynv/ros:humble-desktop-l4t-r36.4.0 \
     /bin/bash -c ". /opt/ros/humble/install/setup.bash && exec bash"

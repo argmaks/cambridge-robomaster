@@ -17,8 +17,8 @@ Each subdirectory is a self-contained service, typically running as a Docker con
 | Folder | Purpose |
 |---|---|
 | `robomaster_bridge/` | CAN ↔ ROS 2 bridge. Builds [`robomaster_ros2_can`](https://github.com/janblumenkamp/robomaster_ros2_can) and exposes ROS 2 topics for controlling and reading the DJI RoboMaster over `can0` at 1 Mbps. |
-| `cam_driver/` | CSI camera → ROS 2 image pipeline using jetson-utils. Two nodes: `camera_source` (raw capture) and `camera_proc` (rectify/resize). Installed as `camera_stream_0.service`. |
-| `cam_driver_gscam2/` | Alternative GStreamer-based camera pipeline (`gscam2`). Swap-in for `cam_driver/`. |
+| `cam_driver/` | CSI camera → ROS 2 image pipeline using jetson-utils (legacy, JP5). |
+| `cam_driver_gscam2/` | **Active camera service.** GStreamer-based pipeline (`gscam2`) for JP6. Publishes JPEG-compressed frames via Argus. Installed as `camera_stream_0.service`. |
 | `camera_utils/` | Shell scripts to tune Jetson BPMP hardware clocks (VI, ISP, NVCSI) for maximum camera throughput. |
 | `joycon/` | Dockerized ROS 2 joystick node (`game_controller_node`). Publishes controller input to `/<robot_ns>/joy`. |
 | `ui/` | On-robot operator UI: SSD1306 OLED (I2C), GPIO button, battery/wheel state display, emergency stop client. |
@@ -99,9 +99,16 @@ bash robomaster_bridge/run_docker.sh
 
 ### 6. (Optional) Install the camera service
 
+Install the host GStreamer Argus plugin (required — not installed by default on JP6):
+
 ```bash
-cd cam_driver
-sudo bash install.bash
+sudo apt-get install nvidia-l4t-gstreamer
+```
+
+Then build and install the camera service:
+
+```bash
+sudo bash cam_driver_gscam2/install.bash
 ```
 
 ### 7. (Optional) Install and run the UI service
@@ -199,35 +206,33 @@ RPM range is **-1000 to 1000** per wheel (`fl` = front-left, `fr` = front-right,
 
 ### Overview
 
-The `cam_driver/` service runs two nodes under `/<robot_ns>/camera_0/`:
+The `cam_driver_gscam2/` service runs a single `gscam2` node under `/<robot_ns>/camera_0/`:
 
-| Node | Subscribes | Publishes | Description |
-|---|---|---|---|
-| `camera_source` | — | `image_raw`, `camera_info` | Captures from CSI camera at 1920×1080 @ 15 fps via NVIDIA Argus |
-| `camera_proc` | `image_raw`, `camera_info` | `image_proc` | Fisheye undistortion + downscale to 224px height, 120° FOV |
+| Topic | Type | Description |
+|---|---|---|
+| `camera_0/image_raw/compressed` | `sensor_msgs/CompressedImage` | JPEG frames, 1920×1080 @ 20 fps |
+| `camera_0/camera_info` | `sensor_msgs/CameraInfo` | Calibration data |
 
-`image_proc` is the ML-ready output (≈398×224). Use `image_raw` for full resolution.
+The camera service starts automatically on boot via `camera_stream_0.service` (installed by `sudo bash cam_driver_gscam2/install.bash`).
 
-The camera service starts automatically on boot via `camera_stream_0.service` (installed by `sudo bash cam_driver/install.bash`). It has a 30-second pre-start delay to wait for the Argus daemon.
+**Host prerequisite:** `nvidia-l4t-gstreamer` must be installed on the Jetson — this provides the `nvarguscamerasrc` GStreamer plugin that talks to the Argus daemon. The plugin is mounted read-only into the container at runtime.
 
 > **Note:** Cyclone DDS in the camera container is pinned to `wlan0` — you must be on the same Wi-Fi network to receive image topics from another machine.
 
 ### Grabbing a sample image
 
-`grab_image.py` (in this repo) subscribes to an image topic and saves one frame to disk. Run it from inside the debug shell:
+`grab_image.py` (in this repo) subscribes to the compressed image topic and saves one frame to disk. Run it from inside the debug shell:
 
 ```bash
 # Start the debug shell (Robot/ is mounted at /opt/robot)
 bash /home/nvidia/Robot/debug/ros2_shell.bash
 
-# Inside the container — save the processed stream (398x224, default)
+# Inside the container — grab one frame (saved to /home/nvidia/Robot/camera_sample.jpg on the host)
 python3 /opt/robot/grab_image.py
 
-# Save the raw full-resolution stream (1920x1080)
-python3 /opt/robot/grab_image.py /robomaster_max/camera_0/image_raw /opt/robot/raw.jpg
+# Save the full-resolution compressed stream to a custom path
+python3 /opt/robot/grab_image.py /robomaster_max/camera_0/image_raw/compressed /opt/robot/raw.jpg
 ```
-
-The image is written to `/home/nvidia/Robot/camera_sample.jpg` on the host.
 
 > **QoS note:** The camera publishes with `best_effort` reliability (`qos_profile_sensor_data`). Subscribing with the default `reliable` QoS will silently receive nothing — `grab_image.py` already handles this correctly.
 

@@ -8,7 +8,7 @@ if [[ $UID != 0 ]]; then
 fi
 
 echo "Build docker container"
-docker build . -t cam_driver:latest
+docker build "$(dirname "$0")" -t cam_driver:latest
 
 echo "Prepare systemd service"
 hostname=$(hostname)
@@ -24,7 +24,7 @@ After=nvargus-daemon.service
 Requires=nvargus-daemon.service
 
 [Service]
-ExecStart=/usr/bin/docker run --rm --runtime nvidia --net=host --ipc=host --pid=host -v /tmp/argus_socket:/tmp/argus_socket --hostname ${hostname} cam_driver:latest /bin/bash -c ". install/setup.bash && while true; do ros2 run gscam2 gscam_main --ros-args --params-file cam_param_jpg.yaml -r __ns:=/${namespace}/camera_0; done"
+ExecStart=/usr/bin/docker run --rm --runtime nvidia --net=host --ipc=host --pid=host -v /tmp/argus_socket:/tmp/argus_socket -v /usr/lib/aarch64-linux-gnu/gstreamer-1.0:/usr/lib/aarch64-linux-gnu/gstreamer-1.0:ro --hostname ${hostname} cam_driver:latest /bin/bash -c ". install/setup.bash && while true; do ros2 run gscam2 gscam_main --ros-args --params-file cam_param_jpg.yaml -r __ns:=/${namespace}/camera_0; done"
 Restart=always
 
 [Install]
@@ -37,6 +37,6 @@ echo "${camera_service}" > /etc/systemd/system/camera_stream_0.service
 
 echo "Enable and start service"
 systemctl enable camera_stream_0
-systemctl start camera_stream_0
+systemctl restart camera_stream_0
 
 echo "Success!"
