@@ -1,0 +1,5 @@
+# fixes the issue with expired GPG key for ROS 2
+
+FROM dustynv/ros:humble-desktop-l4t-r36.4.0
+RUN curl -sSL https://raw.githubusercontent.com/ros/rosdistro/master/ros.key \
+    -o /usr/share/keyrings/ros-archive-keyring.gpg

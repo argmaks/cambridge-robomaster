@@ -1,4 +1,6 @@
-FROM dustynv/ros:humble-pytorch-l4t-r35.3.1
+# vision_base is built via jetson-containers for JP6 (L4T r36.x):
+#   WITH_CUDSS=0 CUDA_VERSION=12.6 jetson-containers build --base=ros-humble-fixed:l4t-r36.4.0 --name=vision_base l4t-pytorch
+FROM vision_base:latest
 
 RUN apt-get update && apt-get install -y git vim cmake
 

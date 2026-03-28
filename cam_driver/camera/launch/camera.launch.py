@@ -28,9 +28,9 @@ def generate_launch_description():
                 name="camera_proc",
                 parameters=[{
                     "image_height": 224,
-                    "fov": 120.0,
-                    "aperture_width": 6.287,
-                    "aperture_height": 4.712,
+                    "fov": 54.0,       # Pi v2 IMX219 horizontal FOV at 1920x1080
+                    "aperture_width": 3.68,   # IMX219 sensor width (mm)
+                    "aperture_height": 2.07,  # IMX219 sensor height for 16:9 (mm)
                 }],
             ),
         ]

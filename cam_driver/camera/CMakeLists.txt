@@ -6,7 +6,7 @@ find_package(jetson-inference REQUIRED)
 find_package(CUDA REQUIRED)
 find_package(catkin QUIET)
 find_package(ament_cmake QUIET)
-find_package(VPI 2.0)
+find_package(VPI)  # JP5 uses VPI 2.x, JP6 uses VPI 3.x
 
 find_package(rclcpp REQUIRED)
 find_package(std_msgs REQUIRED)

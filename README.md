@@ -17,8 +17,8 @@ Each subdirectory is a self-contained service, typically running as a Docker con
 | Folder | Purpose |
 |---|---|
 | `robomaster_bridge/` | CAN ↔ ROS 2 bridge. Builds [`robomaster_ros2_can`](https://github.com/janblumenkamp/robomaster_ros2_can) and exposes ROS 2 topics for controlling and reading the DJI RoboMaster over `can0` at 1 Mbps. |
-| `cam_driver/` | CSI camera → ROS 2 image pipeline using jetson-utils. Two nodes: `camera_source` (raw capture) and `camera_proc` (rectify/resize). **JP5 (L4T r35.x) only** — requires a custom image built via jetson-containers (TODO). |
-| `cam_driver_gscam2/` | GStreamer-based camera pipeline (`gscam2`). **Active driver for JP6 (L4T r36.x) + Raspberry Pi v2 (IMX219).** Installed as `camera_stream_0.service`. |
+| `cam_driver/` | CSI camera → ROS 2 image pipeline using jetson-utils. Two nodes: `camera_source` (raw capture) and `camera_proc` (rectify/resize). **Not currently working on JP6** — migration stalled at `vision_base` build; see `CAMERA_MIGRATION_HQ_TO_PIV2_JP6.md §4`. |
+| `cam_driver_gscam2/` | GStreamer-based camera pipeline (`gscam2`). **Only working camera driver on JP6 (L4T r36.x) + Raspberry Pi v2 (IMX219).** Installed as `camera_stream_0.service`. |
 | `camera_utils/` | Shell scripts to tune Jetson BPMP hardware clocks (VI, ISP, NVCSI) for maximum camera throughput. |
 | `joycon/` | Dockerized ROS 2 joystick node (`game_controller_node`). Publishes controller input to `/<robot_ns>/joy`. |
 | `ui/` | On-robot operator UI: SSD1306 OLED (I2C), GPIO button, battery/wheel state display, emergency stop client. |
