@@ -31,11 +31,25 @@ Each subdirectory is a self-contained service, typically running as a Docker con
 **Network layout:**
 - Infrastructure Wi-Fi: `wlan0`, `10.3.1.x` — robots are `robomaster-1`, `robomaster-2`, etc.
 - Ad-hoc mesh: `wlan1`, `10.3.2.x`
-- Robot namespaces in ROS 2 match the hostname: `robomaster_1`, `robomaster_2`, etc.
+- Robot namespaces in ROS 2 match the hostname: `robomaster_1`, `robomaster_max`, etc.
 
 ---
 
 ## First-Time Setup (per Jetson)
+
+### 0. Install prerequisites and clone the repo
+
+```bash
+sudo apt-get update
+sudo apt-get install curl
+```
+
+Clone this repo and rename `cambridge_robomaster` to `Robot`:
+
+```bash
+git clone <repo-url> Robot
+cd Robot
+```
 
 ### 1. Set hostname and passwordless sudo
 
@@ -45,20 +59,16 @@ sudo vim /etc/hostname           # set to e.g. robomaster-1
 sudo reboot
 ```
 
-### 2. Set up Docker
+### 2. Install and set up Docker
 
 ```bash
-sudo ./docker/add_group.bash
-sudo ./docker/setup_docker_compose.bash
-sudo cp docker/daemon.json /etc/docker/
-sudo service docker restart
+sudo bash docker/install_docker.sh
 ```
 
-### 3. Provision the OS
+This script installs Docker CE from the official APT repository, sets the NVIDIA container runtime as the default, copies `docker/daemon.json` (which includes the private registry at `10.3.0.22:5000`), enables Docker at boot, and adds the `nvidia` user to the `docker` group. Log out and back in after it completes.
 
-```bash
-sudo bash setup/setup.bash
-```
+> See `~/install-docker-jetson-jp6.md` for full installation notes and troubleshooting.
+
 
 ### 4. Install and start the CAN bridge
 
@@ -84,23 +94,28 @@ sudo bash install.bash
 bash ui/run_docker.sh
 ```
 
+### 7. Install jetson-containers
+
+[jetson-containers](https://github.com/dusty-nv/jetson-containers) is a community-maintained modular build system providing pre-built and buildable Docker images for AI/ML workloads on Jetson (PyTorch, LLMs, ROS, diffusion models, and more).
+
+Run the following **on the Jetson**:
+
+```bash
+git clone https://github.com/dusty-nv/jetson-containers
+cd jetson-containers
+bash install.sh
+```
+
 ---
 
 ## Controlling a Robot
 
 ### Prerequisites
 
-ROS 2 is **not installed natively** on the Jetson host — it lives inside Docker. Use the `ros2_panoptes_control` container:
+ROS 2 is **not installed natively** on the Jetson host — it lives inside Docker. Use the debug shell:
 
 ```bash
-bash /home/nvidia/ros2_panoptes/docker/control/run_docker.sh
-```
-
-Inside the container, source the workspace:
-
-```bash
-source /opt/ros/humble/install/setup.bash
-source /opt/robomaster/install/setup.bash
+bash /home/nvidia/Robot/debug/ros2_shell.bash
 ```
 
 ### Sending velocity commands (`cmd_vel`)
@@ -111,19 +126,19 @@ The bridge subscribes to `geometry_msgs/msg/Twist` on `/<robot_ns>/cmd_vel`.
 
 ```bash
 # Move forward
-ros2 topic pub -r 10 /robomaster_2/cmd_vel geometry_msgs/msg/Twist \
+ros2 topic pub -r 10 /robomaster_max/cmd_vel geometry_msgs/msg/Twist \
   "{linear: {x: 0.1, y: 0.0, z: 0.0}, angular: {x: 0.0, y: 0.0, z: 0.0}}"
 
 # Strafe right
-ros2 topic pub -r 10 /robomaster_2/cmd_vel geometry_msgs/msg/Twist \
+ros2 topic pub -r 10 /robomaster_max/cmd_vel geometry_msgs/msg/Twist \
   "{linear: {x: 0.0, y: 0.1, z: 0.0}, angular: {x: 0.0, y: 0.0, z: 0.0}}"
 
 # Rotate clockwise (turn right)
-ros2 topic pub -r 10 /robomaster_2/cmd_vel geometry_msgs/msg/Twist \
-  "{linear: {x: 0.0, y: 0.0, z: 0.0}, angular: {x: 0.0, y: 0.0, z: 0.5}}"
+ros2 topic pub -r 10 /robomaster_max/cmd_vel geometry_msgs/msg/Twist \
+  "{linear: {x: 0.0, y: 0.0, z: 0.0}, angular: {x: 0.0, y: 0.0, z: 0.05}}"
 
 # Stop
-ros2 topic pub --once /robomaster_2/cmd_vel geometry_msgs/msg/Twist "{}"
+ros2 topic pub --once /robomaster_max/cmd_vel geometry_msgs/msg/Twist "{}"
 ```
 
 ### Coordinate system
@@ -140,22 +155,12 @@ This is the **opposite** of ROS REP-103 (Z-up, CCW positive). Negate `angular.z`
 
 
 
-### Velocity limits (simulator reference)
-
-The values below are the clamp limits defined in `ros2_panoptes/src/simple_simulator/simple_simulator/simple_robomaster.py` and likely reflect DJI's documented hardware limits. They are **not enforced by the real bridge** — treat them as a safe operating guideline until verified on hardware.
-
-| Field | Max |
-|---|---|
-| `linear.x` | ±3.5 m/s |
-| `linear.y` | ±2.8 m/s |
-| `angular.z` | ±10.5 rad/s |
-
 ### Sending raw wheel RPM commands (`cmd_wheels`)
 
 For direct wheel control, publish `robomaster_msgs/msg/WheelSpeed` to `/<robot_ns>/cmd_wheels`. Use **`-r 50` Hz** — the firmware requires a sustained command stream at this rate.
 
 ```bash
-ros2 topic pub -r 50 /robomaster_2/cmd_wheels robomaster_msgs/msg/WheelSpeed \
+ros2 topic pub -r 50 /robomaster_max/cmd_wheels robomaster_msgs/msg/WheelSpeed \
   "{fr: 200, fl: 200, rl: 200, rr: 200}"
 ```
 
@@ -182,17 +187,17 @@ The camera service starts automatically on boot via `camera_stream_0.service` (i
 
 ### Grabbing a sample image
 
-`grab_image.py` (in this repo) subscribes to an image topic and saves one frame to disk. Run it from inside the `ros2_panoptes_control` container:
+`grab_image.py` (in this repo) subscribes to an image topic and saves one frame to disk. Run it from inside the debug shell:
 
 ```bash
-# Start the container (Robot/ is mounted at /opt/Robot)
-bash /home/nvidia/ros2_panoptes/docker/control/run_docker.sh
+# Start the debug shell (Robot/ is mounted at /opt/robot)
+bash /home/nvidia/Robot/debug/ros2_shell.bash
 
 # Inside the container — save the processed stream (398x224, default)
-python3 /opt/Robot/grab_image.py
+python3 /opt/robot/grab_image.py
 
 # Save the raw full-resolution stream (1920x1080)
-python3 /opt/Robot/grab_image.py /robomaster_2/camera_0/image_raw /opt/Robot/raw.jpg
+python3 /opt/robot/grab_image.py /robomaster_max/camera_0/image_raw /opt/robot/raw.jpg
 ```
 
 The image is written to `/home/nvidia/Robot/camera_sample.jpg` on the host.
@@ -206,5 +211,37 @@ The image is written to `/home/nvidia/Robot/camera_sample.jpg` on the host.
 The `EmergencyStop` ROS 2 service must not be in the stopped state. If the robot is unresponsive, clear the stop:
 
 ```bash
-ros2 service call /robomaster_2/emergency_stop emergency_stop_msgs/srv/EmergencyStop "{stop: false}"
+ros2 service call /robomaster_max/emergency_stop emergency_stop_msgs/srv/EmergencyStop "{stop: false}"
+```
+
+---
+
+## Troubleshooting
+
+### SSL / certificate errors on `git clone`, `apt-get`, or `docker pull`
+
+**Symptom:** `server certificate verification failed. CAfile: none CRLfile: none`, or `The certificate chain uses not yet valid certificate.`
+
+**Cause:** The Jetson has no RTC battery. After a cold boot (or long power-off) the hardware clock resets to 1970-01-01, making all TLS certificates appear to be from the future and therefore invalid.
+
+**Fix:**
+```bash
+sudo timedatectl set-ntp true
+sudo systemctl restart systemd-timesyncd
+timedatectl status   # "Local time" should show the correct date within ~30 s
+```
+
+If no internet is available yet, set the time manually:
+```bash
+sudo date -s "YYYY-MM-DD HH:MM:SS"
+```
+
+To persist the correct time to the hardware clock (survives soft reboots, not cold power-loss):
+```bash
+sudo hwclock --systohc
+```
+
+To make NTP sync happen earlier in the boot sequence (recommended):
+```bash
+sudo systemctl enable systemd-time-wait-sync
 ```
