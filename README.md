@@ -41,7 +41,7 @@ Each subdirectory is a self-contained service, typically running as a Docker con
 
 ```bash
 sudo apt-get update
-sudo apt-get install curl
+sudo apt-get install curl tmux
 ```
 
 Clone this repo and rename `cambridge_robomaster` to `Robot`:
@@ -69,8 +69,26 @@ This script installs Docker CE from the official APT repository, sets the NVIDIA
 
 > See `~/install-docker-jetson-jp6.md` for full installation notes and troubleshooting.
 
+### 3. Switch to headless mode
 
-### 4. Install and start the CAN bridge
+Disable the desktop environment to free GPU and CPU resources:
+
+```bash
+sudo systemctl set-default multi-user.target
+sudo reboot
+```
+
+### 4. Set power mode to MAXN
+
+MAXN unlocks all CPU/GPU cores and removes power caps:
+
+```bash
+sudo nvpmodel -m <power-mode-number>
+```
+
+Available power modes are listed in `/etc/nvpmodel.conf`. Mode `0` is typically MAXN (maximum performance).
+
+### 5. Install and start the CAN bridge
 
 ```bash
 cd robomaster_bridge
@@ -79,14 +97,14 @@ sudo bash install.bash
 bash robomaster_bridge/run_docker.sh
 ```
 
-### 5. (Optional) Install the camera service
+### 6. (Optional) Install the camera service
 
 ```bash
 cd cam_driver
 sudo bash install.bash
 ```
 
-### 6. (Optional) Install and run the UI service
+### 7. (Optional) Install and run the UI service
 
 ```bash
 cd ui
@@ -94,7 +112,7 @@ sudo bash install.bash
 bash ui/run_docker.sh
 ```
 
-### 7. Install jetson-containers
+### 8. Install jetson-containers
 
 [jetson-containers](https://github.com/dusty-nv/jetson-containers) is a community-maintained modular build system providing pre-built and buildable Docker images for AI/ML workloads on Jetson (PyTorch, LLMs, ROS, diffusion models, and more).
 
@@ -106,7 +124,7 @@ cd jetson-containers
 bash install.sh
 ```
 
-### 8. Install VLLM
+### 9. Install VLLM
 
 ```bash
 docker pull ghcr.io/nvidia-ai-iot/vllm:latest-jetson-orin
