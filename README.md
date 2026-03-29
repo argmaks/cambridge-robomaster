@@ -106,6 +106,15 @@ cd jetson-containers
 bash install.sh
 ```
 
+### 8. Install VLLM
+
+```bash
+docker pull ghcr.io/nvidia-ai-iot/vllm:latest-jetson-orin
+```
+
+If the pull fails with `connection reset by peer` over IPv6, see [Docker pull fails over IPv6](#docker-pull-fails-over-ipv6-connection-reset-by-peer) in Troubleshooting.
+
+
 ---
 
 ## Controlling a Robot
@@ -204,9 +213,59 @@ The image is written to `/home/nvidia/Robot/camera_sample.jpg` on the host.
 
 > **QoS note:** The camera publishes with `best_effort` reliability (`qos_profile_sensor_data`). Subscribing with the default `reliable` QoS will silently receive nothing — `grab_image.py` already handles this correctly.
 
+
 ---
 
-### Emergency stop
+## LLM Inference using vLLM
+
+### Starting the vLLM container
+
+```bash
+docker run --rm -it --runtime nvidia --network host \
+  -v ~/.cache/huggingface:/root/.cache/huggingface \
+  ghcr.io/nvidia-ai-iot/vllm:latest-jetson-orin
+```
+
+If Docker reports `unknown or invalid runtime name: nvidia`, see [NVIDIA container runtime not recognised](#nvidia-container-runtime-not-recognised) in Troubleshooting.
+
+### Serving a model
+
+Inside the container:
+
+```bash
+vllm serve Qwen/Qwen3.5-0.8B --gpu-memory-utilization 0.6 --max-model-len 8656
+```
+
+### Benchmarking a model
+
+Find the running container ID:
+
+```bash
+docker ps
+```
+
+Open an interactive shell inside it:
+
+```bash
+docker exec -it <CONTAINER_ID> bash
+```
+
+Run the benchmark:
+
+```bash
+vllm bench serve \
+  --dataset-name random \
+  --model Qwen/Qwen3.5-0.8B \
+  --num-prompts 50 \
+  --percentile-metrics ttft,tpot,itl,e2el \
+  --random-input-len 2048 \
+  --random-output-len 128 \
+  --max-concurrency 1
+```
+
+---
+
+## Emergency stop
 
 The `EmergencyStop` ROS 2 service must not be in the stopped state. If the robot is unresponsive, clear the stop:
 
@@ -220,7 +279,14 @@ ros2 service call /robomaster_max/emergency_stop emergency_stop_msgs/srv/Emergen
 
 ### SSL / certificate errors on `git clone`, `apt-get`, or `docker pull`
 
-**Symptom:** `server certificate verification failed. CAfile: none CRLfile: none`, or `The certificate chain uses not yet valid certificate.`
+**Symptom:** Any of the following:
+- `server certificate verification failed. CAfile: none CRLfile: none`
+- `The certificate chain uses not yet valid certificate.`
+- A Docker image build fails during `apt-get update` inside a container with errors like:
+  ```
+  E: Release file for http://ports.ubuntu.com/ubuntu-ports/dists/jammy-updates/InRelease is not valid yet (invalid for another 18h 18min 38s). Updates for this repository will not be applied.
+  ```
+  followed by `The command ... returned a non-zero code: 100` and `jetson-containers build` failing after only a few seconds.
 
 **Cause:** The Jetson has no RTC battery. After a cold boot (or long power-off) the hardware clock resets to 1970-01-01, making all TLS certificates appear to be from the future and therefore invalid.
 
@@ -244,4 +310,56 @@ sudo hwclock --systohc
 To make NTP sync happen earlier in the boot sequence (recommended):
 ```bash
 sudo systemctl enable systemd-time-wait-sync
+```
+
+### Docker pull fails over IPv6 (`connection reset by peer`)
+
+**Symptom:** `docker pull` starts but fails mid-download with `read: connection reset by peer` and the source/destination addresses are IPv6 (e.g. `[2a00:...]:port->[2606:...]:443`).
+
+**Cause:** The Jetson's IPv6 route to GitHub's container CDN (`pkg-containers.githubusercontent.com`) is unstable.
+
+**Fix:** Force the system to prefer IPv4:
+```bash
+echo 'precedence ::ffff:0:0/96  100' | sudo tee -a /etc/gai.conf
+```
+
+If that is insufficient (Docker daemon may bypass `gai.conf`), disable IPv6 at the kernel level:
+```bash
+sudo sysctl -w net.ipv6.conf.all.disable_ipv6=1
+sudo sysctl -w net.ipv6.conf.default.disable_ipv6=1
+```
+
+To make the kernel-level change permanent:
+```bash
+echo -e 'net.ipv6.conf.all.disable_ipv6=1\nnet.ipv6.conf.default.disable_ipv6=1' | sudo tee -a /etc/sysctl.conf
+```
+
+### NVIDIA container runtime not recognised
+
+**Symptom:** `docker run --runtime nvidia ...` fails with `docker: Error response from daemon: unknown or invalid runtime name: nvidia`.
+
+**Cause:** The Docker daemon's `/etc/docker/daemon.json` does not register the NVIDIA container runtime — typically because Docker was installed before `nvidia-container-runtime` or the config was never written.
+
+**Fix:** Write the runtime config and restart Docker:
+```bash
+sudo tee /etc/docker/daemon.json > /dev/null << 'EOF'
+{
+    "runtimes": {
+        "nvidia": {
+            "path": "nvidia-container-runtime",
+            "runtimeArgs": []
+        }
+    },
+    "default-runtime": "nvidia"
+}
+EOF
+
+sudo systemctl daemon-reload && sudo systemctl restart docker
+```
+
+This change is permanent — `/etc/docker/daemon.json` is read on every daemon start and survives reboots. Verify Docker starts automatically on boot with:
+```bash
+sudo systemctl is-enabled docker   # should print "enabled"
+# If not:
+sudo systemctl enable docker
 ```
