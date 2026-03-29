@@ -27,6 +27,7 @@ Each subdirectory is a self-contained service, typically running as a Docker con
 | `adhoc/` | Ad-hoc Wi-Fi setup (`wlan1`, SSID `roboAdHoc`, `10.3.2.x`) for robot-to-robot mesh networking. Also contains fleet-wide firewall helpers and a Fast DDS profile. |
 | `setup/` | Jetson provisioning: apt packages, user creation, `nmcli` Wi-Fi profile for the `robomaster` network (`10.3.1.x`). |
 | `docker/` | Helpers to pull images from the private registry (`10.3.0.22:5000`) and set the NVIDIA container runtime as Docker default. |
+| `llm_controller/` | LLM/VLM robot controller. Serves a model via vLLM, calls it in a loop, and publishes velocity commands to `cmd_vel`. |
 
 **Network layout:**
 - Infrastructure Wi-Fi: `wlan0`, `10.3.1.x` — robots are `robomaster-1`, `robomaster-2`, etc.
@@ -138,6 +139,14 @@ docker pull ghcr.io/nvidia-ai-iot/vllm:latest-jetson-orin
 ```
 
 If the pull fails with `connection reset by peer` over IPv6, see [Docker pull fails over IPv6](#docker-pull-fails-over-ipv6-connection-reset-by-peer) in Troubleshooting.
+
+### 10. (Optional) Install the LLM controller
+
+```bash
+bash llm_controller/install.bash
+```
+
+This builds the `llm_controller:latest` Docker image (ROS 2 Humble + openai) and pulls the vLLM Jetson image.
 
 
 ---
@@ -284,6 +293,85 @@ vllm bench serve \
   --random-input-len 2048 \
   --random-output-len 128 \
   --max-concurrency 1
+```
+
+---
+
+## LLM Controller
+
+`llm_controller/` is a minimal pipeline that lets a locally-served LLM drive the robot by publishing to `cmd_vel`.
+
+### Architecture
+
+```
+Terminal 1                        Terminal 2
+────────────────────────────      ────────────────────────────────────────
+bash llm_controller/              bash llm_controller/run_docker.sh
+  run_vllm.sh                     # inside container:
+                                  python3 /opt/robot/llm_controller/control.py
+│                                 │
+│  vLLM server :8000              │  ROS 2 node "llm_controller"
+│  (Qwen/Qwen3.5-0.8B)           │  ├─ background thread: calls LLM, parses JSON
+│                                 │  └─ timer: publishes cmd_vel @ 10 Hz
+└── ←── HTTP /v1/chat/completions ┘
+```
+
+The 10 Hz publish timer runs independently of inference so the firmware watchdog is always satisfied even when the LLM is mid-inference.
+
+### Running
+
+**Terminal 1 — start the model server:**
+
+```bash
+bash llm_controller/run_vllm.sh
+```
+
+Wait for `Application startup complete` before proceeding. The model is downloaded on first run and cached in `~/.cache/huggingface`.
+
+**Terminal 2 — enter the controller container:**
+
+```bash
+bash llm_controller/run_docker.sh
+```
+
+**Inside the container — start the controller:**
+
+```bash
+python3 /opt/robot/llm_controller/control.py
+```
+
+### Configuration
+
+All tunables are environment variables or constants at the top of `control.py`:
+
+| Variable | Default | Description |
+|---|---|---|
+| `LLM_MODEL` | `Qwen/Qwen3.5-0.8B` | Model served by vLLM |
+| `VLLM_BASE_URL` | `http://localhost:8000/v1` | vLLM API endpoint |
+| `ROBOT_NS` | hostname with `-` → `_` | ROS 2 namespace |
+| `MAX_LINEAR` | `0.1` m/s | Velocity cap applied to LLM output |
+| `MAX_ANGULAR` | `0.05` rad/s | Angular rate cap |
+
+To change the robot's behaviour, edit `USER_PROMPT` in `control.py`. The LLM is instructed to reply with a single JSON object:
+
+```json
+{"linear_x": 0.1, "linear_y": 0.0, "angular_z": 0.0}
+```
+
+which is parsed and clipped to the velocity limits before publishing.
+
+### Tuning vLLM memory
+
+`gpu_memory_utilization` must be set below `free_gpu / total_gpu`. Check with:
+
+```bash
+nvidia-smi --query-gpu=memory.free,memory.total --format=csv,noheader
+```
+
+Override the default (`0.55`) at runtime:
+
+```bash
+GPU_MEM=0.5 bash llm_controller/run_vllm.sh
 ```
 
 ---
